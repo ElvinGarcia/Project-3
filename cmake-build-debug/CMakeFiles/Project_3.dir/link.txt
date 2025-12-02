@@ -1,0 +1,1 @@
+/usr/bin/g++ -g CMakeFiles/Project_3.dir/main.cpp.o -o Project_3  -fopenmp 
