@@ -1,110 +1,225 @@
+#include <iostream>
+#include <vector>
+#include <list>
+#include <cstdlib>
 
+using namespace std;
 
-#include <iostream>  // i/o operation
-#include <vector>    // dynamic arrays
-#include <omp.h>    // OpenMP functions & directives
-#include <chrono>   // time
+// Process States
+enum Status {
+    READY,
+    BLOCKED,
+    FINISHED
+};
 
-using namespace  std;
+// Process Control Block (PCB)
+struct Process {
+    int id;             // 0-5
+    int pc;             // Program Counter
+    int type;           // 0 = Reader, 1 = Writer
+    Status status;      // Current state
+};
 
-//  fills vectors A and B
-void initializeVectors( vector<int> & A, vector<int> & B, int n) {
-    for (int i = 0; i < n; ++i) {
-        A[i] = i + 1;
-        B[i] = n - i;
+// Custom Semaphore Definition
+struct Semaphore {
+    int value;              // The counter
+    list<int> wait_queue;   // List of Process IDs waiting on this semaphore
+    string name;            // For debugging (e.g., "mutex" or "wrt")
+};
+
+// //////////////////////////////////////////////////////////////////////////////////////
+
+// Global array of processes (assuming 6 total: 3 readers, 3 writers)
+Process processes[6];
+
+// --- WAIT OPERATION (P) ---
+// Returns true if the process can proceed immediately.
+// Returns false if the process was blocked.
+bool SemWait(Semaphore &sem, int pid) {
+    sem.value--;
+
+    if (sem.value < 0) {
+        // Resource busy: Block the process
+        sem.wait_queue.push_back(pid);
+        processes[pid].status = BLOCKED;
+
+        cout << "Process " << pid << " is BLOCKED on semaphore " << sem.name << endl;
+        return false; // Do not increment PC yet
+    }
+
+    // Resource acquired
+    return true; // Can increment PC
+}
+
+// --- SIGNAL OPERATION (V) ---
+void SemSignal(Semaphore &sem) {
+    sem.value++;
+
+    if (sem.value <= 0) {
+        // Someone is waiting: Wake them up
+        if (!sem.wait_queue.empty()) {
+            int wakeup_pid = sem.wait_queue.front();
+            sem.wait_queue.pop_front();
+
+            processes[wakeup_pid].status = READY;
+            cout << "Process " << wakeup_pid << " unblocked from " << sem.name << endl;
+        }
     }
 }
 
-// Performs vector addition by dividing the work load into vectors A & B among multiple threads.
-void parallelVectorAddition(const vector<int>& A, const vector<int>& B, vector<int>& C, int n, int thread_num) {
-    #pragma omp parallel num_threads(thread_num) // directive to set number of threads to run
-    {
-        // Each thread gets its own private copies of these variables
-        int thread_id = omp_get_thread_num(); // captures the thread's ID for use in calculation
-        int num_threads     = omp_get_num_threads();  // the number of threads.
-        int start_index = thread_id * n / num_threads;    // dividing the total number of elements among the number of threads
+// //////////////////////Integrating into the Switch Statement////////////////////////////////////////////////////////////////
 
-        int end_index;
-        if (thread_id == num_threads - 1) // checks thread is last
-            {
-            end_index = n;  // last thread goes to the end
-        } else {
-            end_index = (thread_id + 1) * n / num_threads; //
-        }
-        // loops through each its own range and computes individual vectors
-        for (int i = start_index; i < end_index; ++i) {
-            C[i] = A[i] + B[i];
-        }
+// Global Semaphores
+Semaphore mutex = {1, {}, "mutex"}; // Initialize to 1 (Binary)
+Semaphore wrt = {1, {}, "wrt"};     // Initialize to 1 (Binary)
+int read_count = 0;
+Semaphore reader_limiter = {2, {}, "reader_limiter"};
+
+void run_writer(int pid) {
+    Process &p = processes[pid]; // Reference to current process
+
+    void run_reader(int pid) {
+    Process &p = processes[pid];
+
+    switch (p.pc) {
+        case 0:
+            // Instruction: Wait(reader_limiter)
+            // Enforces the "Up to two readers" rule
+            if (SemWait(reader_limiter, pid)) {
+                p.pc++;
+            }
+            break;
+
+        case 1:
+            // Instruction: Wait(mutex)
+            // Protects the read_count variable
+            if (SemWait(mutex, pid)) {
+                p.pc++;
+            }
+            break;
+
+        case 2:
+            // Instruction: Increment read_count
+            read_count++;
+            p.pc++;
+            break;
+
+        case 3:
+            // Instruction: First reader locks the writer
+            // Logic: IF (read_count == 1) THEN Wait(wrt)
+            if (read_count == 1) {
+                // Try to acquire writer lock
+                if (SemWait(wrt, pid)) {
+                    // Success: acquired lock, move next
+                    p.pc++;
+                }
+                // Else: SemWait returned false (blocked).
+                // We stay at Case 3. Logic pauses here until unblocked.
+            } else {
+                // If read_count > 1, we don't need to wait on wrt
+                p.pc++;
+            }
+            break;
+
+        case 4:
+            // Instruction: Signal(mutex)
+            // Done modifying read_count, release it so other readers can enter
+            SemSignal(mutex);
+            p.pc++;
+            break;
+
+        case 5:
+            // Instruction: CRITICAL SECTION (Reading)
+            cout << "*** Reader " << pid << " is READING ***" << endl;
+            active_readers++;
+
+            // PANIC CHECK [cite: 10, 12]
+            // Panic if a writer is present OR if > 2 readers (though semaphore prevents this)
+            if (active_writers > 0 || active_readers > 2) {
+                cout << "PANIC: Rules violation! Writer present or too many readers." << endl;
+            }
+            p.pc++;
+            break;
+
+        case 6:
+            // Instruction: Leave CS, prepare to exit
+            active_readers--;
+            p.pc++;
+            break;
+
+        case 7:
+            // Instruction: Wait(mutex)
+            // Need to decrement read_count safely
+            if (SemWait(mutex, pid)) {
+                p.pc++;
+            }
+            break;
+
+        case 8:
+            // Instruction: Decrement read_count
+            read_count--;
+            p.pc++;
+            break;
+
+        case 9:
+            // Instruction: Last reader releases the writer
+            // Logic: IF (read_count == 0) THEN Signal(wrt)
+            if (read_count == 0) {
+                SemSignal(wrt);
+            }
+            p.pc++;
+            break;
+
+        case 10:
+            // Instruction: Signal(mutex)
+            SemSignal(mutex);
+            p.pc++;
+            break;
+
+        case 11:
+            // Instruction: Signal(reader_limiter)
+            // Free up a slot for another reader
+            SemSignal(reader_limiter);
+            p.pc++;
+            break;
+
+        case 12:
+            cout << "Reader " << pid << " finished." << endl;
+            p.status = FINISHED;
+            break;
     }
 }
+// //////////////////////The Main Loop (The Scheduler)////////////////////////////////////////////////////////////////
 
-// checks that the output value from vector C is 10001
-bool checkOutput(const vector<int>& C, int n) {
-    for (int i = 0; i < n; ++i) {
-        if (C[i] != (n + 1)) {
-            return false;
+int main() {
+    srand(time(0));
+
+    // Initialize Processes (Example)
+    for(int i=0; i<6; i++) {
+        processes[i].id = i;
+        processes[i].pc = 0;
+        processes[i].status = READY;
+        // Assign types: 0-2 are Readers, 3-5 are Writers
+        processes[i].type = (i < 3) ? 0 : 1;
+    }
+
+    bool all_finished = false;
+    while (!all_finished) {
+        // 1. Pick a random process [cite: 14]
+        int pid = rand() % 6;
+
+        // 2. Only run if READY
+        if (processes[pid].status == READY) {
+            if (processes[pid].type == 0) {
+                 // run_reader(pid); // You need to implement this
+            } else {
+                 run_writer(pid);
+            }
         }
-    }
-    return true;
-}
+        // If BLOCKED or FINISHED, do nothing (simulates waiting)
 
-int main(int argc, char* argv[]) {
-// Checks the correct of arguments where provided
-    if (argc != 3) {
-        cerr << "Usage: " << argv[0] << " <n> <threads>" << endl;
-        return 1;
-    }
-
-    // converts user input form strings to integers
-    int n = stoi(argv[1]);
-    int num_threads = stoi(argv[2]);
-
-    // Initialization of vectors A, B, C with size of n =  use input
-    vector<int> A(n), B(n), C(n);
-    initializeVectors(A, B, n);
-
-    // Needed to measure the exact time each thread starts and stops
-    // chrono uses the system timer
-    auto start = chrono::high_resolution_clock::now();
-
-    // Performs the parallel vector addition.
-    // this function helps C contain the sum of the other vectors
-    parallelVectorAddition(A, B, C, n, num_threads);
-
-    // Stop the timer that was previously started
-    // checks the difference between the end and start time
-    // and stores it in elapsed variable
-    auto end = chrono::high_resolution_clock::now();
-    chrono::duration<double> elapsed = end - start;
-
-    // Checks the computed output
-    // the results are stored in variable isCorrect
-    // based on the boolean returned the message "correct" or "incorrect" is returned.
-    bool isCorrect = checkOutput(C, n);
-    if (isCorrect == true) {
-        cout << "Output is correct" << endl;
-    } else {
-        cout << "Output is incorrect" << endl;
-    }
-
-    // Print the running time along with the number of threads
-    cout << "Threads: " << num_threads
-          << "\tTime: " << elapsed.count()
-          << endl;
-
-
-    // mini version of original vector
-    // run only when n == 10000 and mini demo for when n = 100 with 6 threads
-    if (n == 10000) {
-        int mini_n = 100;
-        vector<int> mini_A(mini_n), mini_B(mini_n), mini_C(mini_n);
-        initializeVectors(mini_A, mini_B, mini_n);
-        parallelVectorAddition(mini_A, mini_B, mini_C, mini_n, 6);
-
-        cout << "\nvmini version of original vector output (first 10 elements):" << endl;
-        for (int i = 0; i < 10; ++i) {
-            cout << "C[" << i << "] = " << mini_C[i] << endl;
-        }
+        // 3. Check termination condition (if all processes are FINISHED)
+        // ... (loop through all processes to check if status == FINISHED)
     }
 
     return 0;
