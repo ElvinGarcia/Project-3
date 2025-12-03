@@ -37,7 +37,21 @@ Semaphore mutex = {1, {}, "mutex"};
 Semaphore wrt = {1, {}, "wrt"};
 Semaphore reader_limiter = {2, {}, "reader_limiter"};
 
-// --- 2. SEMAPHORE FUNCTIONS ---
+// Checks if the Critical Section rules are being violated.
+void check_panic() {
+    // Rule 1: No writer and reader together.
+    // Rule 2: No two writers together.
+    // Rule 3: Max 2 readers.
+    if (active_writers > 1 || (active_writers > 0 && active_readers > 0) || active_readers > 2) {
+        cout << "\n***************************************************" << endl;
+        cout << "PANIC: Synchronization Rules Violated!" << endl;
+        cout << "Active Writers: " << active_writers << endl;
+        cout << "Active Readers: " << active_readers << endl;
+        cout << "***************************************************\n" << endl;
+    }
+}
+
+// ---  SEMAPHORE FUNCTIONS ---
 
 bool SemWait(Semaphore &sem, int pid) {
     sem.value--;
@@ -68,7 +82,7 @@ void SemSignal(Semaphore &sem) {
         }
     }
 }
-// --- 3. WORKER FUNCTIONS ---
+// --- WORKER FUNCTIONS ---
 
 // Function for WRITERS
 void run_writer(int pid) {
@@ -88,8 +102,8 @@ void run_writer(int pid) {
             cout << "Writer " << pid << " is WRITING." << endl;
 
             // --- PANIC CHECK ---
-            if (active_readers > 0 || active_writers > 1)
-                cout << "PANIC: Rules violation! (Writer entered illegally)" << endl;
+            check_panic();
+
             p.pc++;
             break;
         case 2: // Exit Critical Section
@@ -143,8 +157,7 @@ void run_reader(int pid) {
             cout << "Reader " << pid << " is READING." << endl;
 
             // --- PANIC CHECK ---
-            if (active_writers > 0 || active_readers > 2)
-                cout << "PANIC: Rules violation! (Writer present or >2 readers)" << endl;
+            check_panic();
             p.pc++;
             break;
         case 6: // Exit CS
@@ -206,12 +219,12 @@ int main() {
             // Update completion count
             if (processes[pid].status == FINISHED) {
                 completed++;
-                // Hack: mark as BLOCKED
+                //  mark as BLOCKED
                 processes[pid].status = BLOCKED; // Remove from scheduling
             }
         }
     }
 
-    cout << "All processes completed." << endl;
+    cout << "DONE !!!" << endl;
     return 0;
 }
