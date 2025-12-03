@@ -77,12 +77,19 @@ void run_writer(int pid) {
         case 0: // Request Entry
             if (SemWait(wrt, pid)) p.pc++;
             break;
-        case 1: // Critical Section
+        case 1: // Instruction: CRITICAL SECTION (Writing)
             active_writers++;
+
+            // REQUIREMENT: Report other readers/writers
+            cout << "Writer " << pid << " enters. "
+                 << "Other Readers: " << active_readers
+                 << ", Other Writers: " << (active_writers - 1) << endl;
+
             cout << "Writer " << pid << " is WRITING." << endl;
-            // Panic Check [cite: 10, 12]
+
+            // --- PANIC CHECK ---
             if (active_readers > 0 || active_writers > 1)
-                cout << "PANIC: Rules violation! (Writer with others)" << endl;
+                cout << "PANIC: Rules violation! (Writer entered illegally)" << endl;
             p.pc++;
             break;
         case 2: // Exit Critical Section
@@ -125,10 +132,17 @@ void run_reader(int pid) {
             SemSignal(mutex);
             p.pc++;
             break;
-        case 5: // Critical Section
+        case 5: // Instruction: CRITICAL SECTION (Reading)
             active_readers++;
+
+            // REQUIREMENT: Report other readers/writers
+            cout << "Reader " << pid << " enters. "
+                 << "Other Readers: " << (active_readers - 1)
+                 << ", Other Writers: " << active_writers << endl;
+
             cout << "Reader " << pid << " is READING." << endl;
-            // Panic Check [cite: 10, 12]
+
+            // --- PANIC CHECK ---
             if (active_writers > 0 || active_readers > 2)
                 cout << "PANIC: Rules violation! (Writer present or >2 readers)" << endl;
             p.pc++;
