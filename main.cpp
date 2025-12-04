@@ -30,7 +30,7 @@ int active_writers = 0; // track writers in critical section, case 1 ++ case 2 -
 int read_count = 0; // tracks how many enter/exit readers in critical section, if == 1 blocks writers, else == 0 allows writer
 
 // Processes Array
-Process processes[6];
+Process processes[6]; // for storage of process IDs
 
 // Simulated Semaphores
 SimSemaphore read_count_lock = {1, {}, "read_count_lock"};
