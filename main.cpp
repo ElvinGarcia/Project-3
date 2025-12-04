@@ -7,13 +7,13 @@
 
 using namespace std;
 
-// --- 1. GLOBAL VARIABLES & STRUCTURES ---
+// GLOBAL VARIABLES & STRUCTURES ---
 
 enum Status { READY, BLOCKED, FINISHED };
 
 struct Process {
     int id;
-    int pc;
+    int program_counter;
     int type;
     Status status;
 };
@@ -73,7 +73,7 @@ void SemSignal(SimSemaphore &sem) {
 
             processes[wakeup_pid].status = READY;
             // ***  Advances thread ***
-            processes[wakeup_pid].pc++;
+            processes[wakeup_pid].program_counter++;
             // cout << "Process " << wakeup_pid << " UNBLOCKED from " << sem.name << endl;
         }
     }
@@ -82,10 +82,10 @@ void SemSignal(SimSemaphore &sem) {
 
 // Function for WRITERS
 void run_writer(int pid) {
-    Process &p = processes[pid];
-    switch (p.pc) {
+    Process &current_process = processes[pid];
+    switch (current_process.program_counter) {
         case 0: // Request Entry
-            if (SemWait(wrt, pid)) p.pc++;
+            if (SemWait(wrt, pid)) current_process.program_counter++;
             break;
         case 1: // Instruction: CRITICAL SECTION (Writing)
             active_writers++;
@@ -100,49 +100,49 @@ void run_writer(int pid) {
             // --- PANIC CHECK ---
             check_panic();
 
-            p.pc++;
+            current_process.program_counter++;
             break;
         case 2: // Exit Critical Section
             active_writers--;
             SemSignal(wrt);
-            p.pc++;
+            current_process.program_counter++;
             break;
         case 3: // Finish
             cout << "Writer " << pid << " finished." << endl;
-            p.status = FINISHED;
+            current_process.status = FINISHED;
             break;
     }
 }
 
 //////// Function for READERS ////////
 void run_reader(int pid) {
-    Process &p = processes[pid];
-    switch (p.pc) {
+    Process &current_process = processes[pid];
+    switch (current_process.program_counter) {
 
         case 0: // Check Reader Limit (Max 2) [cite: 6]
-            if (SemWait(reader_limiter, pid)) p.pc++;
+            if (SemWait(reader_limiter, pid)) current_process.program_counter++;
             break;
 
         case 1: // Lock read_count
-            if (SemWait(read_count_lock, pid)) p.pc++;
+            if (SemWait(read_count_lock, pid)) current_process.program_counter++;
             break;
 
         case 2: // Increment read_count
             read_count++;
-            p.pc++;
+            current_process.program_counter++;
             break;
 
         case 3: // First reader locks writer
             if (read_count == 1) {
                 // If we get the lock, we move manually.
-                // If we BLOCK, SemSignal will move us when we wake up.
-                if (SemWait(wrt, pid)) {  p.pc++;}
-            } else { p.pc++; }
+                // If we BLOCK, SemSignal will move us when we wake ucurrent_process.
+                if (SemWait(wrt, pid)) {  current_process.program_counter++;}
+            } else { current_process.program_counter++; }
             break;
 
         case 4: // Release read_count lock
             SemSignal(read_count_lock);
-            p.pc++;
+            current_process.program_counter++;
             break;
 
         case 5: // Instruction: CRITICAL SECTION (Reading)
@@ -157,42 +157,42 @@ void run_reader(int pid) {
 
             // --- PANIC CHECK ---
             check_panic();
-            p.pc++;
+            current_process.program_counter++;
             break;
 
         case 6: // Exit CS
             active_readers--;
-            p.pc++;
+            current_process.program_counter++;
             break;
 
         case 7: // Lock read_count for exit
-            if (SemWait(read_count_lock, pid)) p.pc++;
+            if (SemWait(read_count_lock, pid)) current_process.program_counter++;
             break;
 
         case 8: // Decrement read_count
             read_count--;
-            p.pc++;
+            current_process.program_counter++;
             break;
 
         case 9: // Last reader releases writer
             if (read_count == 0) SemSignal(wrt);
-            p.pc++;
+            current_process.program_counter++;
             break;
 
         case 10: // Release read_count lock
             SemSignal(read_count_lock);
-            p.pc++;
+            current_process.program_counter++;
             break;
 
         case 11: // Release slot for other readers
             SemSignal(reader_limiter);
-            p.pc++;
+            current_process.program_counter++;
             break;
 
         case 12: // Finish
 
             cout << "Reader " << pid << " finished." << endl;
-            p.status = FINISHED;
+            current_process.status = FINISHED;
             break;
     }
 }
@@ -205,7 +205,7 @@ int main() {
     // Initialize Processes
     for(int i=0; i<6; i++) {
         processes[i].id = i;
-        processes[i].pc = 0;
+        processes[i].program_counter = 0;
         processes[i].status = READY;
         processes[i].type = (i < 3) ? 0 : 1; // 0-2=Reader, 3-5=Writer
     }
