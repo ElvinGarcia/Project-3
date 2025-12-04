@@ -14,46 +14,32 @@ enum Status { READY, BLOCKED, FINISHED };
 struct Process {
     int id;
     int pc;
-    int type;           // 0 = Reader, 1 = Writer
+    int type;
     Status status;
 };
 
-struct Semaphore {
+struct SimSemaphore {
     int value;
     list<int> wait_queue;
     string name;
 };
 
-// Global Shared Data
+// Shared Data
 int active_readers = 0;
 int active_writers = 0;
 int read_count = 0;
 
-// Global Processes Array
+// Processes Array
 Process processes[6];
 
-// Global Semaphores
-Semaphore mutex = {1, {}, "mutex"};
-Semaphore wrt = {1, {}, "wrt"};
-Semaphore reader_limiter = {2, {}, "reader_limiter"};
+// Simulated Semaphores
+SimSemaphore read_count_lock = {1, {}, "read_count_lock"};
+SimSemaphore wrt = {1, {}, "wrt"};
+SimSemaphore reader_limiter = {2, {}, "reader_limiter"};
 
-// Checks if the Critical Section rules are being violated.
-void check_panic() {
-    // Rule 1: No writer and reader together.
-    // Rule 2: No two writers together.
-    // Rule 3: Max 2 readers.
-    if (active_writers > 1 || (active_writers > 0 && active_readers > 0) || active_readers > 2) {
-        cout << "\n***************************************************" << endl;
-        cout << "PANIC: Synchronization Rules Violated!" << endl;
-        cout << "Active Writers: " << active_writers << endl;
-        cout << "Active Readers: " << active_readers << endl;
-        cout << "***************************************************\n" << endl;
-    }
-}
+// ---  SimSemaphore FUNCTIONS ---
 
-// ---  SEMAPHORE FUNCTIONS ---
-
-bool SemWait(Semaphore &sem, int pid) {
+bool SemWait(SimSemaphore &sem, int pid) {
     sem.value--;
     if (sem.value < 0) {
         sem.wait_queue.push_back(pid);
@@ -63,8 +49,20 @@ bool SemWait(Semaphore &sem, int pid) {
     return true;
 }
 
+void check_panic() { // Checks if the Critical Section rules are being violated.
+    // Rule 1: No writer and reader together.|| // Rule 2: No two writers together. || // Rule 3: Max 2 readers.
+    if (active_writers > 1 || (active_writers > 0 && active_readers > 0) || active_readers > 2) {
+        cout << "\n***************************************************" << endl;
+        cout << "PANIC: Synchronization Rules Violated!" << endl;
+        cout << "Active Writers: " << active_writers << endl;
+        cout << "Active Readers: " << active_readers << endl;
+        cout << "***************************************************\n" << endl;
+    }
+}
+
+
 // --- SIGNAL OPERATION (V) ---
-void SemSignal(Semaphore &sem) {
+void SemSignal(SimSemaphore &sem) {
     sem.value++;
 
     if (sem.value <= 0) {
@@ -74,10 +72,8 @@ void SemSignal(Semaphore &sem) {
             sem.wait_queue.pop_front();
 
             processes[wakeup_pid].status = READY;
-
-            // *** FIX: Advance their PC so they don't Wait again ***
+            // ***  Advances thread ***
             processes[wakeup_pid].pc++;
-
             // cout << "Process " << wakeup_pid << " UNBLOCKED from " << sem.name << endl;
         }
     }
@@ -118,34 +114,37 @@ void run_writer(int pid) {
     }
 }
 
-// Function for READERS
+//////// Function for READERS ////////
 void run_reader(int pid) {
     Process &p = processes[pid];
     switch (p.pc) {
+
         case 0: // Check Reader Limit (Max 2) [cite: 6]
             if (SemWait(reader_limiter, pid)) p.pc++;
             break;
+
         case 1: // Lock read_count
-            if (SemWait(mutex, pid)) p.pc++;
+            if (SemWait(read_count_lock, pid)) p.pc++;
             break;
+
         case 2: // Increment read_count
             read_count++;
             p.pc++;
             break;
+
         case 3: // First reader locks writer
             if (read_count == 1) {
                 // If we get the lock, we move manually.
                 // If we BLOCK, SemSignal will move us when we wake up.
-                if (SemWait(wrt, pid)) {
-                    p.pc++;
-                }
-            } else {
-                p.pc++;
-            }
-            break;case 4: // Release read_count lock
-            SemSignal(mutex);
+                if (SemWait(wrt, pid)) {  p.pc++;}
+            } else { p.pc++; }
+            break;
+
+        case 4: // Release read_count lock
+            SemSignal(read_count_lock);
             p.pc++;
             break;
+
         case 5: // Instruction: CRITICAL SECTION (Reading)
             active_readers++;
 
@@ -160,40 +159,48 @@ void run_reader(int pid) {
             check_panic();
             p.pc++;
             break;
+
         case 6: // Exit CS
             active_readers--;
             p.pc++;
             break;
+
         case 7: // Lock read_count for exit
-            if (SemWait(mutex, pid)) p.pc++;
+            if (SemWait(read_count_lock, pid)) p.pc++;
             break;
+
         case 8: // Decrement read_count
             read_count--;
             p.pc++;
             break;
+
         case 9: // Last reader releases writer
             if (read_count == 0) SemSignal(wrt);
             p.pc++;
             break;
+
         case 10: // Release read_count lock
-            SemSignal(mutex);
+            SemSignal(read_count_lock);
             p.pc++;
             break;
+
         case 11: // Release slot for other readers
             SemSignal(reader_limiter);
             p.pc++;
             break;
+
         case 12: // Finish
+
             cout << "Reader " << pid << " finished." << endl;
             p.status = FINISHED;
             break;
     }
 }
 
-// --- 4. MAIN SCHEDULER ---
+// SCHEDULER ---
 
 int main() {
-    srand(time(0)); // [cite: 14]
+    srand(time(0));
 
     // Initialize Processes
     for(int i=0; i<6; i++) {
@@ -205,7 +212,7 @@ int main() {
 
     int completed = 0;
     while (completed < 6) {
-        // Pick random process [cite: 14]
+        // Pick random process
         int pid = rand() % 6;
 
         // Only run if READY
