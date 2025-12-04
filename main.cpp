@@ -25,9 +25,9 @@ struct SimSemaphore {
 };
 
 // Shared Data
-int active_readers = 0;
-int active_writers = 0;
-int read_count = 0;
+int active_readers = 0; // track readers in critical section, case 5 ++ case 6 --
+int active_writers = 0; // track writers in critical section, case 1 ++ case 2 --
+int read_count = 0; // tracks how many enter/exit readers in critical section, if == 1 blocks writers, else == 0 allows writer
 
 // Processes Array
 Process processes[6];
