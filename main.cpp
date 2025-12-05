@@ -29,13 +29,13 @@ int active_readers = 0; // track readers in critical section, case 5 ++ case 6 -
 int active_writers = 0; // track writers in critical section, case 1 ++ case 2 --
 int read_count = 0; // tracks how many enter/exit readers in critical section, if == 1 blocks writers, else == 0 allows writer
 
-// Processes Array
-Process processes[6]; // for storage of process IDs
+
+Process processes[6]; // storage of processes IDs
 
 // Simulated Semaphores
-SimSemaphore read_count_lock = {1, {}, "read_count_lock"};
-SimSemaphore wrt = {1, {}, "wrt"};
-SimSemaphore reader_limiter = {2, {}, "reader_limiter"};
+SimSemaphore read_count_lock = {1, {}, "read_count_lock"};   // protect the recount_count variable.
+SimSemaphore wrt = {1, {}, "wrt"};                           // "to block access to critical area"
+SimSemaphore reader_limiter = {2, {}, "reader_limiter"};      // control how many are in critical section.
 
 // ---  SimSemaphore FUNCTIONS ---
 
@@ -148,48 +148,53 @@ void run_reader(int pid) {
         case 5: // Instruction: CRITICAL SECTION (Reading)
             active_readers++;
 
-            // REQUIREMENT: Report other readers/writers
+            // Report other readers/writers
             cout << "Reader " << pid << " enters. "
                  << "Other Readers: " << (active_readers - 1)
                  << ", Other Writers: " << active_writers << endl;
 
             cout << "Reader " << pid << " is READING." << endl;
 
-            // --- PANIC CHECK ---
-            check_panic();
+            check_panic(); // --- PANIC CHECK ---
             current_process.program_counter++;
             break;
 
-        case 6: // Exit CS
+        case 6: // allows the scheduler to pick someone else  while  reader is still holding the lock!
+             cout << "Reader " << pid << " is READING (Busy work)..." << endl;
+
+             current_process.program_counter++;
+             break;
+
+        case 7: // Exit CS
             active_readers--;
             current_process.program_counter++;
             break;
 
-        case 7: // Lock read_count for exit
+        case 8: // Lock read_count for exit
             if (SemWait(read_count_lock, pid)) current_process.program_counter++;
             break;
 
-        case 8: // Decrement read_count
+        case 9: // Decrement read_count
             read_count--;
             current_process.program_counter++;
             break;
 
-        case 9: // Last reader releases writer
+        case 10: // Last reader releases writer
             if (read_count == 0) SemSignal(wrt);
             current_process.program_counter++;
             break;
 
-        case 10: // Release read_count lock
+        case 11: // Release read_count lock
             SemSignal(read_count_lock);
             current_process.program_counter++;
             break;
 
-        case 11: // Release slot for other readers
+        case 12: // Release slot for other readers
             SemSignal(reader_limiter);
             current_process.program_counter++;
             break;
 
-        case 12: // Finish
+        case 13: // Finish
 
             cout << "Reader " << pid << " finished." << endl;
             current_process.status = FINISHED;
