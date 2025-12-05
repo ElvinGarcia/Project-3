@@ -7,7 +7,7 @@
 
 using namespace std;
 
-// GLOBAL VARIABLES & STRUCTURES ---
+// GLOBAL Data Types ---
 
 enum Status { READY, BLOCKED, FINISHED };
 
@@ -24,7 +24,7 @@ struct SimSemaphore {
     string name;
 };
 
-// Shared Data
+// Shared Data to tracker readers, writers in CS
 int active_readers = 0; // track readers in critical section, case 5 ++ case 6 --
 int active_writers = 0; // track writers in critical section, case 1 ++ case 2 --
 int read_count = 0; // tracks how many enter/exit readers in critical section, if == 1 blocks writers, else == 0 allows writer
@@ -32,14 +32,13 @@ int read_count = 0; // tracks how many enter/exit readers in critical section, i
 
 Process processes[6]; // storage of processes IDs
 
-// Simulated Semaphores
+// Simulated variables to mimic Semaphores
 SimSemaphore read_count_lock = {1, {}, "read_count_lock"};   // protect the recount_count variable.
 SimSemaphore wrt = {1, {}, "wrt"};                           // "to block access to critical area"
 SimSemaphore reader_limiter = {2, {}, "reader_limiter"};      // control how many are in critical section.
 
-// ---  SimSemaphore FUNCTIONS ---
 
-// ---  SimSemaphore FUNCTIONS ---
+///// ---  SimSemaphore FUNCTIONS START --- /////
 
 bool SemWait(SimSemaphore &sem, int pid) {
     sem.value--;
@@ -48,7 +47,7 @@ bool SemWait(SimSemaphore &sem, int pid) {
         sem.wait_queue.push_back(pid);
         processes[pid].status = BLOCKED;
 
-        // This makes the "collision" visible in your output
+        //  makes  collision visible
         cout << "Process " << pid << " tried to access " << sem.name << " but was BLOCKED." << endl;
 
         return false;
@@ -56,16 +55,6 @@ bool SemWait(SimSemaphore &sem, int pid) {
     return true;
 }
 
-// Rule 1: No writer and reader together.|| // Rule 2: No two writers together. || // Rule 3: Max 2 readers.
-void check_panic() { // Checks if the Critical Section rules are being violated.
-    if (active_writers > 1 || (active_writers > 0 && active_readers > 0) || active_readers > 2) {
-        cout << "\n***************************************************" << endl;
-        cout << "PANIC: Synchronization Rules Violated!" << endl;
-        cout << "Active Writers: " << active_writers << endl;
-        cout << "Active Readers: " << active_readers << endl;
-        cout << "***************************************************\n" << endl;
-    }
-}
 
 
 // --- SIGNAL OPERATION (V) ---
@@ -86,7 +75,22 @@ void SemSignal(SimSemaphore &sem) {
         }
     }
 }
-// --- WORKER FUNCTIONS ---
+
+
+///// ---  SimSemaphore FUNCTIONS END ----- /////
+
+void check_panic() { // Checks if the Critical Section rules are being violated.
+    //  No writer and reader together.|| //  No two writers together. || //  Max 2 readers.
+    if (active_writers > 1 || (active_writers > 0 && active_readers > 0) || active_readers > 2) {
+        cout << "\n***************************************************" << endl;
+        cout << "PANIC: Synchronization Rules Violated!" << endl;
+        cout << "Active Writers: " << active_writers << endl;
+        cout << "Active Readers: " << active_readers << endl;
+        cout << "***************************************************\n" << endl;
+    }
+}
+
+////// --- WORKER FUNCTIONS START--- /////
 
 // Function for WRITERS
 void run_writer(int pid) {
@@ -121,7 +125,7 @@ void run_writer(int pid) {
     }
 }
 
-//////// Function for READERS ////////
+// Function for READERS
 void run_reader(int pid) {
     Process &current_process = processes[pid];
     switch (current_process.program_counter) {
@@ -206,6 +210,9 @@ void run_reader(int pid) {
             break;
     }
 }
+
+
+////// --- WORKER FUNCTIONS END--- /////
 
 // SCHEDULER ---
 
