@@ -48,18 +48,16 @@ bool SemWait(SimSemaphore &sem, int pid) {
         sem.wait_queue.push_back(pid);
         processes[pid].status = BLOCKED;
 
-
         // This makes the "collision" visible in your output
-        cout << "Process " << pid << " tried to access " << sem.name
-             << " but was BLOCKED." << endl;
+        cout << "Process " << pid << " tried to access " << sem.name << " but was BLOCKED." << endl;
 
         return false;
     }
     return true;
 }
 
+// Rule 1: No writer and reader together.|| // Rule 2: No two writers together. || // Rule 3: Max 2 readers.
 void check_panic() { // Checks if the Critical Section rules are being violated.
-    // Rule 1: No writer and reader together.|| // Rule 2: No two writers together. || // Rule 3: Max 2 readers.
     if (active_writers > 1 || (active_writers > 0 && active_readers > 0) || active_readers > 2) {
         cout << "\n***************************************************" << endl;
         cout << "PANIC: Synchronization Rules Violated!" << endl;
@@ -104,7 +102,6 @@ void run_writer(int pid) {
             cout << "Writer " << pid << " enters. "
                  << "Other Readers: " << active_readers
                  << ", Other Writers: " << (active_writers - 1) << endl;
-
             cout << "Writer " << pid << " is WRITING." << endl;
 
             // --- PANIC CHECK ---
@@ -162,14 +159,13 @@ void run_reader(int pid) {
             cout << "Reader " << pid << " enters. "
                  << "Other Readers: " << (active_readers - 1)
                  << ", Other Writers: " << active_writers << endl;
-
             cout << "Reader " << pid << " is READING." << endl;
 
             check_panic(); // --- PANIC CHECK ---
             current_process.program_counter++;
             break;
 
-        case 6: // allows the scheduler to pick someone else  while  reader is still holding the lock!
+        case 6: // scheduler to picks someone else  while  reader is still holding the lock!
              cout << "Reader " << pid << " is READING (Busy work)..." << endl;
 
              current_process.program_counter++;
@@ -205,7 +201,6 @@ void run_reader(int pid) {
             break;
 
         case 13: // Finish
-
             cout << "Reader " << pid << " finished." << endl;
             current_process.status = FINISHED;
             break;
