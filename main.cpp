@@ -48,7 +48,7 @@ bool SemWait(SimSemaphore &sem, int pid) {
         sem.wait_queue.push_back(pid);
         processes[pid].status = BLOCKED;
 
-        // *** ADD THIS PRINT STATEMENT ***
+
         // This makes the "collision" visible in your output
         cout << "Process " << pid << " tried to access " << sem.name
              << " but was BLOCKED." << endl;
@@ -81,9 +81,10 @@ void SemSignal(SimSemaphore &sem) {
             sem.wait_queue.pop_front();
 
             processes[wakeup_pid].status = READY;
-            // ***  Advances thread ***
+
+            // ***  move thread forward ***
             processes[wakeup_pid].program_counter++;
-            // cout << "Process " << wakeup_pid << " UNBLOCKED from " << sem.name << endl;
+            cout << "Process " << wakeup_pid << " UNBLOCKED from " << sem.name << endl;
         }
     }
 }
