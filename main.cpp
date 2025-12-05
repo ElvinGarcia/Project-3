@@ -33,7 +33,7 @@ int read_count = 0; // tracks how many enter/exit readers in critical section, i
 Process processes[6]; // storage of processes IDs
 
 // Simulated variables to mimic Semaphores
-SimSemaphore read_count_lock = {1, {}, "read_count_lock"};   // protect the recount_count variable.
+SimSemaphore read_count_lock = {1, {}, "read_count_lock"};   // protect the read_count variable.
 SimSemaphore wrt = {1, {}, "wrt"};                           // "to block access to critical area"
 SimSemaphore reader_limiter = {2, {}, "reader_limiter"};      // control how many are in critical section.
 
@@ -57,7 +57,7 @@ bool SemWait(SimSemaphore &sem, int pid) {
 
 
 
-// --- SIGNAL OPERATION (V) ---
+// --- SIGNAL OPERATION ---
 void SemSignal(SimSemaphore &sem) {
     sem.value++;
 
