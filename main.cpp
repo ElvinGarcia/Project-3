@@ -39,11 +39,20 @@ SimSemaphore reader_limiter = {2, {}, "reader_limiter"};      // control how man
 
 // ---  SimSemaphore FUNCTIONS ---
 
+// ---  SimSemaphore FUNCTIONS ---
+
 bool SemWait(SimSemaphore &sem, int pid) {
     sem.value--;
     if (sem.value < 0) {
+        // Resource busy: Add to queue and block
         sem.wait_queue.push_back(pid);
         processes[pid].status = BLOCKED;
+
+        // *** ADD THIS PRINT STATEMENT ***
+        // This makes the "collision" visible in your output
+        cout << "Process " << pid << " tried to access " << sem.name
+             << " but was BLOCKED." << endl;
+
         return false;
     }
     return true;
