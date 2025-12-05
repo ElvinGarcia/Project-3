@@ -43,7 +43,7 @@ SimSemaphore reader_limiter = {2, {}, "reader_limiter"};      // control how man
 bool SemWait(SimSemaphore &sem, int pid) {
     sem.value--;
     if (sem.value < 0) {
-        // Resource busy: Add to queue and block
+        //  When resource busy == true -> Add to queue & block
         sem.wait_queue.push_back(pid);
         processes[pid].status = BLOCKED;
 
@@ -232,7 +232,7 @@ int main() {
         // Pick random process
         int pid = rand() % 6;
 
-        // Only run if READY
+        // run if READY
         if (processes[pid].status == READY) {
             if (processes[pid].type == 0) {
                 run_reader(pid);
